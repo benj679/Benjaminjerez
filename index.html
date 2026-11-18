@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mototaxis Tupiza</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f59e0b">
+    <!-- tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .mobile-container {
+            max-width: 480px;
+            margin: auto;
+            min-height: 100vh;
+            background-color: #f8fafc;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        #map {
+            height: 240px;
+            width: 100%;
+            border-radius: 1rem;
+            z-index: 10;
+            cursor: default;
+        }
+        .selecting-map {
+            cursor: crosshair !important;
+            border: 2px solid #050c4b;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-800">
+
+    <div class="mobile-container flex flex-col justify-between relative overflow-hidden">
+        
+        <!-- HEADER -->
+         <!-- CAMBIAR DE COLOR LA CABEZA -->
+        <header class="bg-emerald-500 text-slate-950 p-4 shadow-md flex justify-between items-center z-20">
+            <div class="flex items-center space-x-2">
+                <!-- CAMBIAR DE ICONO -->
+                <i class="fa-solid fa-motorcycle text-2xl"></i>
+                <h1 class="font-bold text-lg tracking-wide">MotoTupiza <span class="text-xs bg-slate-900 text-amber-400 px-2 py-0.5 rounded-full">BTH</span></h1>
+            </div>
+            <div id="user-badge" class="text-xs font-semibold bg-white/80 px-2.5 py-1 rounded-full shadow-inner">
+                Pasajero
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 overflow-y-auto p-4 relative space-y-4" id="main-content">
+            
+            <!-- VISTA 1: PASAJERO -->
+            <section id="view-passenger" class="space-y-4">
+                
+                <!-- MAPA INTERACTIVO REAL -->
+                <div class="bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+                    <div id="map"></div>
+
+                    <!-- REFERENCIA DEL MAPA INTERACTIVO -->
+                    <p class="text-[10px] text-center text-slate-400 mt-1.5"><i class="fa-solid fa-location-crosshairs text-amber-500"></i> Mapa interactivo - Tupiza, Potosí</p>
+                </div>
+
+                <!-- COLOR DE INTERFAZ DE SOLICITAR VIAJE -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <h2 class="text-slate-700 font-bold mb-3 text-sm flex items-center"><i class="fa-solid fa-route text-amber-500 mr-2"></i> Solicitar viaje</h2>
+                    
+                    <div class="space-y-3">
+                        
+                        <!-- ORIGEN CON BOTÓN GPS -->
+                        <div>
+                            <label class="text-xs text-slate-400 font-medium">Punto de Recogida (Origen)</label>
+                            <div class="flex mt-1 space-x-2">
+                                <input type="text" id="origin" value="Plaza Principal de Tupiza" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-amber-500">
+                                <button onclick="useGPS()" class="bg-slate-100 text-slate-600 px-4 rounded-xl border border-slate-200 hover:bg-slate-200 transition-colors shadow-sm" 
+                                title="Usar mi ubicación actual">
+                                    <i class="fa-solid fa-location-crosshairs"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- DESTINO CON BOTÓN MAPA -->
+                        <div>
+                            <label class="text-xs text-slate-400 font-medium">Destino</label>
+                            <div class="flex mt-1 space-x-2">
+                                <input type="text" id="destination" placeholder="Escribe o selecciona en el mapa..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-amber-500">
+                                <button onclick="enableMapSelection()" id="btn-map-dest" class="bg-slate-100 text-slate-600 px-4 rounded-xl border border-slate-200 hover:bg-slate-200 transition-colors shadow-sm" title="Elegir punto en el mapa">
+                                    <i class="fa-solid fa-map-pin"></i>
+                                </button>
+                            </div>
+                            <!-- Mensaje de ayuda dinámico -->
+                            <p id="map-helper" class="text-[11px] font-bold text-amber-600 hidden mt-1.5 animate-pulse"><i class="fa-solid fa-hand-pointer"></i> Toca un punto en el mapa de arriba...</p>
+                        </div>
+
+                        <!-- TARIFA -->
+                        <div>
+                            <label class="text-xs text-slate-400 font-medium">Oferta tu tarifa (Bs)</label>
+                            <input type="number" id="fare" value="3" class="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-amber-600 focus:outline-none focus:border-amber-500">
+                        </div>
+
+                        <button onclick="requestTrip()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3.5 rounded-xl shadow-lg shadow-amber-500/30 transition-all text-sm mt-2">
+                            Solicitar Mototaxi
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ESTADO DEL VIAJE -->
+                <div id="trip-status-card" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hidden">
+                    <h3 class="font-bold text-sm text-slate-700 mb-2 flex items-center justify-between">
+                        <span>Estado de la Solicitud</span>
+                        <span class="animate-pulse h-2.5 w-2.5 rounded-full bg-amber-500"></span>
+                    </h3>
+                    <div id="status-text" class="text-xs text-slate-500 bg-amber-50 p-3 rounded-xl border border-amber-100 mb-3">
+                        Buscando toritos disponibles...
+                    </div>
+                    <div id="driver-info" class="hidden space-y-2 border-t pt-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="bg-amber-500 text-slate-950 h-10 w-10 rounded-full flex items-center justify-center font-bold"><i class="fa-solid fa-helmet-safety"></i></div>
+                            <div>
+                                <h4 class="font-bold text-sm" id="d-name">Benjamin Santiago Jerez Viaña</h4>
+                                <p class="text-xs text-slate-500">Torito: Motokar TVS, Rojo | Placa: 4521-XYZ</p>
+                                <p class="text-[11px] text-emerald-600 font-bold mt-0.5"><i class="fa-solid fa-phone"></i> Cel: 71829301</p>
+                            </div>
+                        </div>
+                        <button onclick="finishTrip()" class="w-full bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs mt-2 shadow-md hover:bg-emerald-600">
+                            Finalizar y Calificar Viaje
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LISTA DE MOTOS CERCANAS -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Mototaxis Cerca de ti</h3>
+                    <div class="space-y-2.5" id="drivers-list"></div>
+                </div>
+            </section>
+
+            <!-- VISTA 2: CONDUCTOR -->
+            <section id="view-driver" class="space-y-4 hidden">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-sm text-slate-700">Panel de Conductor</h2>
+                        <span id="driver-status-badge" class="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">Disponible</span>
+                    </div>
+                    <div id="incoming-requests" class="space-y-3">
+                        <p class="text-xs text-slate-400 text-center py-6">No hay solicitudes pendientes en este momento.</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- BOTTOM NAVIGATION BAR -->
+        <nav class="bg-white border-t border-slate-100 p-2 flex justify-around items-center z-20">
+            <button onclick="switchView('passenger')" id="nav-passenger" class="flex flex-col items-center text-amber-500 text-xs font-bold px-4 py-1">
+                <i class="fa-solid fa-user text-lg mb-0.5"></i>
+                Pasajero
+            </button>
+            <button onclick="switchView('driver')" id="nav-driver" class="flex flex-col items-center text-slate-400 text-xs font-medium px-4 py-1">
+                <i class="fa-solid fa-motorcycle text-lg mb-0.5"></i>
+                Conductor
+            </button>
+        </nav>
+
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW error:', err));
+        }
+
+        let map, userMarker, destMarker, routeLine;
+        
+        // Coordenadas Iniciales, Se puede cambiar el nombre del centro de Tupiza
+        let currentOriginCoords = [-21.4467, -65.7175]; // Tupiza Centro
+        let currentDestCoords = null;
+        let isSelectingDestination = false;
+        
+        const mockDrivers = [
+            { id: 1, name: 'Benjamin Santiago Jerez Viaña', moto: 'Motokar TVS, Rojo', dist: 'A 200m', lat: -21.4455, lng: -65.7165, phone: '71829301' },
+            { id: 2, name: 'Wilber Antonio Cayara Choque', moto: 'Mavila M-150, Blanco', dist: 'A 450m', lat: -21.4480, lng: -65.7190, phone: '72345678' },
+            { id: 3, name: 'Eloy Coa Quispe', moto: 'Ronco La Nave 200, Azul', dist: 'A 600m', lat: -21.4440, lng: -65.7150, phone: '74123456' }
+        ];
+
+        function initApp() {
+            initMap();
+            renderDrivers();
+            checkActiveTrip();
+            setInterval(checkActiveTrip, 1000); // Sincronización en tiempo real
+        }
+
+        function initMap() {
+            map = L.map('map').setView(currentOriginCoords, 15);
+
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri',
+                maxZoom: 19
+            }).addTo(map);
+
+            const userIcon = L.divIcon({
+                className: 'custom-user-pin',
+                html: '<div style="background-color: #f59e0b; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.6);"></div>',
+                iconSize: [16, 16]
+            });
+            userMarker = L.marker(currentOriginCoords, {icon: userIcon}).addTo(map).bindPopup("<b>Tu Ubicación (Origen)</b>");
+
+            mockDrivers.forEach(d => {
+                const motoIcon = L.divIcon({
+                    className: 'custom-moto-pin',
+                    html: '<div style="background-color: #0f172a; color: #f59e0b; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border: 2px solid #f59e0b;"><i class="fa-solid fa-motorcycle"></i></div>',
+                    iconSize: [26, 26]
+                });
+                L.marker([d.lat, d.lng], {icon: motoIcon}).addTo(map).bindPopup(`<b>${d.name}</b><br>${d.moto} (${d.dist})`);
+            });
+
+            // EVENTO CLICK EN EL MAPA PARA SELECCIONAR DESTINO
+            map.on('click', function(e) {
+                if(isSelectingDestination) {
+                    currentDestCoords = [e.latlng.lat, e.latlng.lng];
+                    
+                    if(destMarker) map.removeLayer(destMarker);
+                    
+                    const destIcon = L.divIcon({
+                        className: 'custom-dest-pin',
+                        html: '<div style="background-color: #ef4444; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; border: 2px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.5);"><i class="fa-solid fa-location-dot"></i></div>',
+                        iconSize: [20, 20]
+                    });
+                    
+                    destMarker = L.marker(currentDestCoords, {icon: destIcon}).addTo(map).bindPopup("<b>Destino Seleccionado</b>").openPopup();
+                    
+                    // Actualizar UI
+                    document.getElementById('destination').value = "Ubicación en el mapa";
+                    document.getElementById('map-helper').classList.add('hidden');
+                    const btnMap = document.getElementById('btn-map-dest');
+                    btnMap.classList.replace('bg-amber-500', 'bg-slate-100');
+                    btnMap.classList.replace('text-white', 'text-slate-600');
+                    document.getElementById('map').classList.remove('selecting-map');
+                    isSelectingDestination = false;
+                }
+            });
+        }
+
+        // FUNCIONALIDAD GPS REAL
+        function useGPS() {
+            if (navigator.geolocation) {
+                const originInput = document.getElementById('origin');
+                originInput.value = "Ubicando GPS...";
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentOriginCoords = [position.coords.latitude, position.coords.longitude];
+                        originInput.value = "Mi Ubicación Actual";
+                        
+                        // Mover el pin del usuario
+                        if(userMarker) map.removeLayer(userMarker);
+                        const userIcon = L.divIcon({
+                            className: 'custom-user-pin',
+                            html: '<div style="background-color: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.6);"></div>',
+                            iconSize: [16, 16]
+                        });
+                        userMarker = L.marker(currentOriginCoords, {icon: userIcon}).addTo(map).bindPopup("<b>Tu GPS Exacto</b>").openPopup();
+                        map.setView(currentOriginCoords, 16);
+                    },
+                    (error) => {
+                        alert("No se pudo obtener la ubicación GPS (permiso denegado o error de red). Usando ubicación por defecto.");
+                        originInput.value = "Plaza Principal de Tupiza";
+                    }
+                );
+            } else {
+                alert("Tu navegador no soporta Geolocalización.");
+            }
+        }
+
+        // ACTIVAR MODO SELECCIÓN EN MAPA
+        function enableMapSelection() {
+            isSelectingDestination = true;
+            document.getElementById('map-helper').classList.remove('hidden');
+            
+            const btnMap = document.getElementById('btn-map-dest');
+            btnMap.classList.replace('bg-slate-100', 'bg-amber-500');
+            btnMap.classList.replace('text-slate-600', 'text-white');
+            
+            document.getElementById('destination').value = "Toca el mapa arriba...";
+            document.getElementById('map').classList.add('selecting-map');
+        }
+
+        function renderDrivers() {
+            const list = document.getElementById('drivers-list');
+            list.innerHTML = mockDrivers.map(d => `
+                <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                    <div class="flex items-center space-x-3">
+                        <div class="bg-amber-100 text-amber-600 p-2 rounded-lg"><i class="fa-solid fa-helmet-safety"></i></div>
+                        <div>
+                            <p class="font-bold text-xs text-slate-700">${d.name}</p>
+                            <p class="text-[10px] text-slate-400">${d.moto} • <span class="text-amber-600 font-semibold">${d.dist}</span></p>
+                        </div>
+                    </div>
+                    <span class="text-[10px] bg-emerald-50 text-emerald-600 font-bold px-2 py-1 rounded-md">Activo</span>
+                </div>
+            `).join('');
+        }
+
+        function switchView(view) {
+            const pSec = document.getElementById('view-passenger');
+            const dSec = document.getElementById('view-driver');
+            const navP = document.getElementById('nav-passenger');
+            const navD = document.getElementById('nav-driver');
+            const badge = document.getElementById('user-badge');
+
+            if(view === 'passenger') {
+                pSec.classList.remove('hidden');
+                dSec.classList.add('hidden');
+                navP.className = "flex flex-col items-center text-amber-500 text-xs font-bold px-4 py-1";
+                navD.className = "flex flex-col items-center text-slate-400 text-xs font-medium px-4 py-1";
+                badge.innerText = "Pasajero";
+                setTimeout(() => { map.invalidateSize(); }, 200);
+            } else {
+                pSec.classList.add('hidden');
+                dSec.classList.remove('hidden');
+                navD.className = "flex flex-col items-center text-amber-500 text-xs font-bold px-4 py-1";
+                navP.className = "flex flex-col items-center text-slate-400 text-xs font-medium px-4 py-1";
+                badge.innerText = "Conductor";
+                loadDriverRequests();
+            }
+        }
+
+        async function requestTrip() {
+            const originText = document.getElementById('origin').value;
+            const destText = document.getElementById('destination').value;
+            const fare = document.getElementById('fare').value;
+
+            if(!destText || destText === "Toca el mapa arriba...") {
+                alert('Por favor selecciona un destino en el mapa o escribe uno.');
+                return;
+            }
+
+            // Si el usuario no seleccionó en el mapa pero escribió un texto, usamos coordenadas de respaldo
+            if(!currentDestCoords) {
+                const textLower = destText.toLowerCase();
+                if(textLower.includes('terminal')) {
+                    currentDestCoords = [-21.4305, -65.7145];
+                } else if(textLower.includes('mercado')) {
+                    currentDestCoords = [-21.4485, -65.7210];
+                } else if(textLower.includes('hospital')) {
+                    currentDestCoords = [-21.4530, -65.7260];
+                   
+                } else {
+                    // Genera un punto cercano aleatorio si escribió algo genérico y no tocó el mapa
+                    currentDestCoords = [currentOriginCoords[0] - 0.004, currentOriginCoords[1] + 0.003];
+                }
+                
+                // Poner el pin automáticamente
+                if(destMarker) map.removeLayer(destMarker);
+                const destIcon = L.divIcon({
+                    className: 'custom-dest-pin',
+                    html: '<div style="background-color: #ef4444; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; border: 2px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.5);"><i class="fa-solid fa-location-dot"></i></div>',
+                    iconSize: [20, 20]
+                });
+                destMarker = L.marker(currentDestCoords, {icon: destIcon}).addTo(map);
+            }
+
+            if(routeLine) map.removeLayer(routeLine);
+
+            // Trazar ruta
+            try {
+                const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${currentOriginCoords[1]},${currentOriginCoords[0]};${currentDestCoords[1]},${currentDestCoords[0]}?overview=full&geometries=geojson`);
+                const data = await response.json();
+                
+                if (data.routes && data.routes.length > 0) {
+                    const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                    routeLine = L.polyline(coords, {color: '#f59e0b', weight: 5, opacity: 0.8}).addTo(map);
+                } else {
+                    throw new Error("Sin ruta");
+                }
+            } catch (error) {
+                const midLat = (currentOriginCoords[0] + currentDestCoords[0]) / 2 - 0.0015;
+                const midLng = (currentOriginCoords[1] + currentDestCoords[1]) / 2 + 0.0015;
+                const urbanRoute = [currentOriginCoords, [midLat, midLng], currentDestCoords];
+                routeLine = L.polyline(urbanRoute, {color: '#f59e0b', weight: 5, smoothFactor: 1}).addTo(map);
+            }
+
+            map.fitBounds(routeLine.getBounds(), {padding: [40, 40]});
+
+            const tripData = { origin: originText, destination: destText, fare, status: 'pending', driver: mockDrivers[0] };
+            localStorage.setItem('active_trip', JSON.stringify(tripData));
+
+            document.getElementById('trip-status-card').classList.remove('hidden');
+            document.getElementById('status-text').innerHTML = `Buscando mototaxista para tu ruta... (${fare} Bs)`;
+        }
+
+        function checkActiveTrip() {
+            const trip = JSON.parse(localStorage.getItem('active_trip'));
+            const statusCard = document.getElementById('trip-status-card');
+            const statusText = document.getElementById('status-text');
+            const driverInfo = document.getElementById('driver-info');
+
+            if(trip) {
+                statusCard.classList.remove('hidden');
+                if(trip.status === 'accepted') {
+                    statusText.innerHTML = `¡Conductor en camino! Se dirige a tu posición.`;
+                    driverInfo.classList.remove('hidden');
+                    document.getElementById('d-name').innerText = trip.driver.name;
+                } else {
+                    statusText.innerHTML = `Buscando mototaxista para tu ruta... (${trip.fare} Bs)`;
+                    driverInfo.classList.add('hidden');
+                }
+            } else {
+                statusCard.classList.add('hidden');
+                driverInfo.classList.add('hidden');
+            }
+
+            const activeViewBadge = document.getElementById('user-badge').innerText;
+            if(activeViewBadge === "Conductor") {
+                loadDriverRequests();
+            }
+        }
+
+        function finishTrip() {
+            localStorage.removeItem('active_trip');
+            document.getElementById('trip-status-card').classList.add('hidden');
+            document.getElementById('driver-info').classList.add('hidden');
+            document.getElementById('destination').value = '';
+            
+            // Reiniciar mapa
+            if(destMarker) map.removeLayer(destMarker);
+            if(routeLine) map.removeLayer(routeLine);
+            currentDestCoords = null; // Resetear coordenadas de destino
+            map.setView(currentOriginCoords, 15);
+            
+            alert('¡Viaje finalizado con éxito! Gracias por usar MotoTupiza.');
+        }
+
+        function loadDriverRequests() {
+            const container = document.getElementById('incoming-requests');
+            const trip = JSON.parse(localStorage.getItem('active_trip'));
+
+            if(trip && trip.status === 'pending') {
+                container.innerHTML = `
+                    <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl space-y-3 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-amber-800 uppercase tracking-wide"><i class="fa-solid fa-bell text-amber-600 mr-1"></i> Nueva Solicitud</span>
+                            <span class="text-sm font-black text-amber-600 bg-amber-100 px-2.5 py-0.5 rounded-full">${trip.fare} Bs</span>
+                        </div>
+                        <div class="space-y-1 text-xs text-slate-700">
+                            <p><b>Recogida:</b> ${trip.origin}</p>
+                            <p><b>Destino:</b> ${trip.destination}</p>
+                        </div>
+                        <button onclick="acceptTripByDriver()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all">
+                            Aceptar Viaje
+                        </button>
+                    </div>
+                `;
+            } else if(trip && trip.status === 'accepted') {
+                container.innerHTML = `
+                    <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl space-y-2 text-center">
+                        <i class="fa-solid fa-circle-check text-emerald-500 text-2xl mb-1"></i>
+                        <p class="text-xs font-bold text-emerald-800">Tienes un viaje en curso</p>
+                        <p class="text-[11px] text-slate-600">En ruta a recoger pasajero.</p>
+                        <span class="inline-block mt-2 text-[10px] bg-emerald-200 text-emerald-900 px-3 py-1 rounded-full font-bold">En servicio</span>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No hay solicitudes pendientes en este momento.</p>`;
+            }
+        }
+
+        function acceptTripByDriver() {
+            const trip = JSON.parse(localStorage.getItem('active_trip'));
+            if(trip) {
+                trip.status = 'accepted';
+                localStorage.setItem('active_trip', JSON.stringify(trip));
+                alert('¡Has aceptado el viaje con éxito!');
+                loadDriverRequests();
+            }
+        }
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
